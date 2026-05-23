@@ -5,9 +5,14 @@ def search_resumes(query,resumes):
     query_embedding=generate_embedding(query)
 
     results=[]
+    
     for resume in resumes:
         resume_embedding=generate_embedding(resume)
-        score=compare_embeddings(query_embedding,resume_embedding)
+        
+        score = compare_embeddings(
+        query_embedding,
+        resume_embedding
+    ) * 100
 
         results.append({
             "resume":resume,

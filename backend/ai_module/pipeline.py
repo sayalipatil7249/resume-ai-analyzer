@@ -50,16 +50,29 @@ def process_resume(file_path, role=None):
     # -----------------------------
     explanation = generate_explanation(score_data, skills, role)
 
-    # -----------------------------
-    # FINAL OUTPUT
-    # -----------------------------
+   # -----------------------------
+# FINAL OUTPUT
+# -----------------------------
     return {
-        "role_detection": role_info,
-        "cleaned_text": cleaned_text,
-        "skills": skills,
-        "score": score_data,
-        "explanation": explanation
-    }
+
+    "predicted_role":
+    role_info["predicted_role"],
+
+    "skills":
+    skills,
+
+    "score":
+    score_data.get("score", 0),
+
+    "summary":
+    explanation.get("summary", "No summary available"),
+
+    "feedback":
+    explanation.get("details", []),
+
+    "cleaned_text":
+    cleaned_text
+}
 
 
 if __name__ == "__main__":

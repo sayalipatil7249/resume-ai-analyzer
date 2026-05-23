@@ -1,0 +1,29 @@
+RESUME ANALYSIS REPORT
+==================================================
+
+Filename: Samruddhi_resume.pdf
+Role: general
+Score: 29
+
+SKILLS
+------------------------------
+- C
+- Css
+- Flask
+- Github
+- Html
+- Java
+- Javascript
+- Oracle
+- Python
+- React
+- Sql
+
+FEEDBACK
+------------------------------
+- Strong technical skill set detected.
+- Good project experience with real implementations.
+- Limited internship or work experience.
+- Relevant certifications found.
+- Project depth is strong and industry-relevant.
+- Diverse technical stack improves job readiness.
