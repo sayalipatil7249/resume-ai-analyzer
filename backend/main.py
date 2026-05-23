@@ -18,8 +18,35 @@ import uuid
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import letter
+from bson import ObjectId
+
+from database.resume_queries import (
+    insert_resume,
+    get_all_resumes,
+    get_resume_by_id,
+    delete_resume_by_id,
+    get_latest_resume
+)
+
+from database.user_queries import (
+    get_user,
+    update_user,
+    update_password,
+    create_user,
+    login_user
+)
+class SignupRequest(BaseModel):
+
+    name: str
+    username: str
+    email: str
+    password: str
 
 
+class LoginRequest(BaseModel):
+
+    email: str
+    password: str
 
 class MatchRequest(BaseModel):
     resume_skills:list
@@ -36,6 +63,7 @@ class SearchRequest(BaseModel):
 
 app = FastAPI()
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -47,7 +75,7 @@ app.add_middleware(
 os.makedirs("uploads", exist_ok=True)
 
 
-resumes_data = []
+
 
 # @app.post("/upload-resume")
 @app.post("/upload-resume")
@@ -56,90 +84,111 @@ async def upload_resume(
     role: str = "general"
 ):
 
-    # Generate unique id
     resume_id = str(uuid.uuid4())
 
-    # File path
     file_location = f"uploads/{resume_id}_{file.filename}"
 
-    # Save file permanently
     with open(file_location, "wb") as buffer:
+
         shutil.copyfileobj(file.file, buffer)
 
-    # Process resume
     result = process_resume(file_location, role)
 
-    # Store data temporarily
     resume_data = {
-        "id": resume_id,
+
+        "resume_id": resume_id,
+
         "filename": file.filename,
+
         "filepath": file_location,
+
         "role": role,
+
         "analysis": result
+
     }
 
-    resumes_data.append(resume_data)
+    saved_resume = insert_resume(resume_data)
 
     return {
-        "message": "Resume uploaded successfully",
-        "resume_id": resume_id,
-        "data": resume_data
-    }
+
+    "message": "Resume uploaded successfully",
+
+    "resume_id": resume_id,
+
+    "data": saved_resume
+
+}
 
 @app.get("/resumes")
-def get_all_resumes():
+def fetch_resumes():
+
+    resumes = get_all_resumes()
+
+    serialized_resumes = resumes
 
     return {
-        "total_resumes": len(resumes_data),
-        "resumes": resumes_data
-    }
+
+    "total_resumes": len(serialized_resumes),
+
+    "resumes": serialized_resumes
+
+}
 
 @app.get("/resume/{resume_id}")
-def get_resume(resume_id: str):
+def fetch_resume(resume_id: str):
 
-    for resume in resumes_data:
+    resume = get_resume_by_id(resume_id)
 
-        if resume["id"] == resume_id:
-            return resume
+    if resume:
+
+        return resume
 
     return {
+
         "message": "Resume not found"
+
     }
 
 @app.get("/resume-file/{resume_id}")
 def get_resume_file(resume_id: str):
 
-    for resume in resumes_data:
+    resume = get_resume_by_id(resume_id)
 
-        if resume["id"] == resume_id:
+    if resume:
 
-            return FileResponse(
-    path=resume["filepath"],
-    filename=resume["filename"]
-)
+        return FileResponse(
+            path=resume["filepath"],
+            filename=resume["filename"]
+        )
 
     return {
         "message": "File not found"
     }
 
 @app.delete("/resume/{resume_id}")
-def delete_resume(resume_id: str):
+def remove_resume(resume_id: str):
 
-    for resume in resumes_data:
+    resume = get_resume_by_id(resume_id)
 
-        if resume["id"] == resume_id:
+    if not resume:
 
-            if os.path.exists(resume["filepath"]):
-                os.remove(resume["filepath"])
+        return {
 
-            resumes_data.remove(resume)
+            "message": "Resume not found"
 
-            return {
-                "message": "Resume deleted successfully"
-            }
+        }
+
+    if os.path.exists(resume["filepath"]):
+
+        os.remove(resume["filepath"])
+
+    delete_resume_by_id(resume_id)
 
     return {
-        "message": "Resume not found"
+
+        "message": "Resume deleted successfully"
+
     }
 
 
@@ -204,7 +253,9 @@ def smart_search(
 @app.get("/api/dashboard")
 def get_dashboard():
 
-    if len(resumes_data) == 0:
+    latest_resume = get_latest_resume()
+
+    if not latest_resume:
 
         return {
             "overallScore": 0,
@@ -217,8 +268,6 @@ def get_dashboard():
             "topSkills": [],
             "feedback": []
         }
-
-    latest_resume = resumes_data[-1]
 
     analysis = latest_resume["analysis"]
 
@@ -272,46 +321,46 @@ from fastapi.responses import FileResponse
 @app.get("/download-report/{resume_id}")
 def download_report(resume_id: str):
 
-    for resume in resumes_data:
+    resume = get_resume_by_id(resume_id)
 
-        if resume["id"] == resume_id:
+    if not resume:
 
-            report_path = f"reports/{resume_id}.txt"
+        return {
+            "message": "Resume not found"
+        }
 
-            os.makedirs("reports", exist_ok=True)
+    report_path = f"reports/{resume_id}.txt"
 
-            analysis = resume["analysis"]
+    os.makedirs("reports", exist_ok=True)
 
-            with open(report_path, "w", encoding="utf-8") as f:
+    analysis = resume["analysis"]
 
-                f.write("RESUME ANALYSIS REPORT\n")
-                f.write("=" * 50 + "\n\n")
+    with open(report_path, "w", encoding="utf-8") as f:
 
-                f.write(f"Filename: {resume['filename']}\n")
-                f.write(f"Role: {analysis.get('predicted_role')}\n")
-                f.write(f"Score: {analysis.get('score')}\n\n")
+        f.write("RESUME ANALYSIS REPORT\n")
+        f.write("=" * 50 + "\n\n")
 
-                f.write("SKILLS\n")
-                f.write("-" * 30 + "\n")
+        f.write(f"Filename: {resume['filename']}\n")
+        f.write(f"Role: {analysis.get('predicted_role')}\n")
+        f.write(f"Score: {analysis.get('score')}\n\n")
 
-                for skill in analysis.get("skills", []):
-                    f.write(f"- {skill}\n")
+        f.write("SKILLS\n")
+        f.write("-" * 30 + "\n")
 
-                f.write("\nFEEDBACK\n")
-                f.write("-" * 30 + "\n")
+        for skill in analysis.get("skills", []):
+            f.write(f"- {skill}\n")
 
-                for fb in analysis.get("feedback", []):
-                    f.write(f"- {fb}\n")
+        f.write("\nFEEDBACK\n")
+        f.write("-" * 30 + "\n")
 
-            return FileResponse(
-                path=report_path,
-                filename=f"{resume['filename']}_report.txt",
-                media_type="text/plain"
-            )
+        for fb in analysis.get("feedback", []):
+            f.write(f"- {fb}\n")
 
-    return {
-        "message": "Resume not found"
-    }
+    return FileResponse(
+        path=report_path,
+        filename=f"{resume['filename']}_report.txt",
+        media_type="text/plain"
+    )
 
 
 class ProfileUpdate(BaseModel):
@@ -326,49 +375,116 @@ class PasswordUpdate(BaseModel):
 
 
 
-# Dummy user data
-user_profile = {
-    "name": "Sayali Patil",
-    "username": "sayali",
-    "email": "sayali@gmail.com",
-    "role": "Admin",
-    "memberSince": "2025"
-}
 
-user_password = "123456"
 
 @app.get("/profile")
-def get_profile():
+def fetch_profile():
 
-    return user_profile
+    user = get_user()
+
+    return {
+
+        "name": user["name"],
+
+        "username": user["username"],
+
+        "email": user["email"],
+
+        "role": user["role"],
+
+        "memberSince": user["memberSince"]
+
+    }
 
 
 @app.put("/profile")
-def update_profile(data: ProfileUpdate):
+def update_profile_api(data: ProfileUpdate):
 
-    user_profile["name"] = data.name
-    user_profile["username"] = data.username
-    user_profile["email"] = data.email
+    update_user(data)
 
     return {
-        "message": "Profile updated successfully",
-        "profile": user_profile
+
+        "message": "Profile updated successfully"
+
     }
 
 @app.put("/change-password")
-def change_password(data: PasswordUpdate):
+def change_password_api(data: PasswordUpdate):
 
-    global user_password
+    success = update_password(
 
-    if data.current_password != user_password:
+        data.current_password,
+
+        data.new_password
+
+    )
+
+    if not success:
 
         return {
-            "message": "Current password is incorrect"
+
+            "message": "Current password incorrect"
+
         }
 
-    user_password = data.new_password
-
     return {
+
         "message": "Password updated successfully"
+
     }
 
+@app.post("/signup")
+def signup(data: SignupRequest):
+
+    user_data = {
+
+        "name": data.name,
+        "username": data.username,
+        "email": data.email,
+        "password": data.password,
+        "role": "User",
+        "memberSince": "2026"
+
+    }
+
+    result = create_user(user_data)
+
+    if not result:
+
+        return {
+
+            "message": "User already exists"
+
+        }
+
+    return {
+
+        "message": "Signup successful"
+
+    }
+
+@app.post("/login")
+def login(data: LoginRequest):
+
+    user = login_user(
+
+        data.email,
+        data.password
+
+    )
+
+    if not user:
+
+        return {
+
+            "message": "Invalid email or password"
+
+        }
+
+    return {
+
+        "message": "Login successful",
+
+        "user": user
+
+    }

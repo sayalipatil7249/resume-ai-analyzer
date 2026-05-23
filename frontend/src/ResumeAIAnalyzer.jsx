@@ -38,6 +38,177 @@ import {
   MoreVertical,
 } from "lucide-react";
 
+const LoginPage = ({ onLogin, onSwitch }) => {
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const handleLogin = async () => {
+
+    try {
+
+      const response = await API.post("/login", {
+
+        email,
+        password
+
+      });
+
+      if (response.data.user) {
+
+        localStorage.setItem(
+
+          "user",
+          JSON.stringify(response.data.user)
+        );
+
+        onLogin(response.data.user);
+
+      } else {
+
+        alert(response.data.message);
+
+      }
+
+    } catch (error) {
+
+      alert("Login failed");
+
+    }
+  };
+
+  return (
+
+    <div className="min-h-screen flex items-center justify-center bg-slate-100">
+
+      <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md">
+
+        <h2 className="text-2xl font-bold mb-6 text-center">
+          Login
+        </h2>
+
+        <input
+          type="email"
+          placeholder="Email"
+          className="w-full border p-3 rounded-lg mb-4"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+
+        <input
+          type="password"
+          placeholder="Password"
+          className="w-full border p-3 rounded-lg mb-4"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+
+        <button
+          onClick={handleLogin}
+          className="w-full bg-indigo-600 text-white py-3 rounded-lg"
+        >
+          Login
+        </button>
+
+        <p className="text-sm text-center mt-4">
+          Don't have an account?
+          <button
+            onClick={onSwitch}
+            className="text-indigo-600 ml-1"
+          >
+            Signup
+          </button>
+        </p>
+
+      </div>
+
+    </div>
+  );
+};
+
+const SignupPage = ({ onSwitch }) => {
+
+  const [form, setForm] = useState({
+
+    name: "",
+    username: "",
+    email: "",
+    password: ""
+
+  });
+
+  const handleSignup = async () => {
+
+    try {
+
+      const response = await API.post(
+
+        "/signup",
+        form
+      );
+
+      alert(response.data.message);
+
+      onSwitch();
+
+    } catch (error) {
+
+      alert("Signup failed");
+
+    }
+  };
+
+  return (
+
+    <div className="min-h-screen flex items-center justify-center bg-slate-100">
+
+      <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md">
+
+        <h2 className="text-2xl font-bold mb-6 text-center">
+          Signup
+        </h2>
+
+        {["name", "username", "email", "password"].map((field) => (
+
+          <input
+            key={field}
+            type={field === "password" ? "password" : "text"}
+            placeholder={field}
+            className="w-full border p-3 rounded-lg mb-4"
+            value={form[field]}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                [field]: e.target.value
+              })
+            }
+          />
+
+        ))}
+
+        <button
+          onClick={handleSignup}
+          className="w-full bg-indigo-600 text-white py-3 rounded-lg"
+        >
+          Signup
+        </button>
+
+        <p className="text-sm text-center mt-4">
+          Already have account?
+          <button
+            onClick={onSwitch}
+            className="text-indigo-600 ml-1"
+          >
+            Login
+          </button>
+        </p>
+
+      </div>
+
+    </div>
+  );
+};
+
 // ─── MOCK DATA LAYER ──────────────────────────────────────────────────────────
 // Replace these with API fetch calls (useEffect + axios/fetch)
 
@@ -370,12 +541,16 @@ const Sidebar = ({
 );
 
 // ─── LAYOUT (pages 2–8) ───────────────────────────────────────────────────────
-const Layout = ({ activePage, onNavigate, dark, onToggleDark, children }) => {
+const Layout = ({
+  activePage,
+  onNavigate,
+  dark,
+  onToggleDark,
+  children,
+  user
+}) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const user = {
-  name: "Sayali Patil",
-};
-
+  
   return (
     <div
       className={`flex h-screen overflow-hidden ${dark ? "dark bg-slate-900" : "bg-slate-50"}`}
@@ -385,7 +560,13 @@ const Layout = ({ activePage, onNavigate, dark, onToggleDark, children }) => {
         onNavigate={onNavigate}
         dark={dark}
         onToggleDark={onToggleDark}
-        onLogout={() => onNavigate("landing")}
+        onLogout={() => {
+
+  localStorage.removeItem("user");
+
+  window.location.reload();
+
+}}
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
       />
@@ -2007,6 +2188,8 @@ const ProfilePage = ({ dark }) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function App() {
+
+  const [authPage, setAuthPage] = useState("login");
   const [page, setPage] = useState("landing");
 
   const [dark, setDark] = useState(false);
@@ -2014,7 +2197,11 @@ export default function App() {
   const [selectedResumeId, setSelectedResumeId] = useState(null);
 
   // NEW USER STATE
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(
+
+  JSON.parse(localStorage.getItem("user"))
+
+);
 
   // NAVIGATION
   const navigate = (p) => setPage(p);
@@ -2026,22 +2213,26 @@ export default function App() {
     setPage("resume-detail");
   };
 
-  // FETCH USER PROFILE
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const response = await API.get("/profile");
-
-        setUser(response.data);
-      } catch (error) {
-        console.log(error);
-      }
-    };
-
-    fetchUser();
-  }, []);
+  
 
   // PAGES WITHOUT SIDEBAR
+  if (!user) {
+
+  return authPage === "login" ? (
+
+    <LoginPage
+      onLogin={setUser}
+      onSwitch={() => setAuthPage("signup")}
+    />
+
+  ) : (
+
+    <SignupPage
+      onSwitch={() => setAuthPage("login")}
+    />
+
+  );
+}
   if (page === "landing") {
     return (
       <LandingPage
